@@ -17,7 +17,7 @@ class UserSerializer(serializers.ModelSerializer):
 class RoomSerializer(serializers.ModelSerializer):
     class Meta:
         model = Room
-        fields = ['id', 'name', 'qr_code', 'exit_mode', 'exit_password']
+        fields = ['id', 'name', 'qr_code']
 
 
 class PlaceSerializer(serializers.ModelSerializer):
@@ -28,7 +28,7 @@ class PlaceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Place
-        fields = ['id', 'number', 'status', 'backend_status', 'occupied_at', 'user', 'user_name']
+        fields = ['id', 'number', 'x', 'y', 'status', 'backend_status', 'confirmation_status', 'occupied_at', 'user', 'user_name']
 
     def get_status(self, obj):
         return {

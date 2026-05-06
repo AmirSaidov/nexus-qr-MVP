@@ -1,11 +1,11 @@
-import { ChevronDown, ScanLine, LogIn, Settings2 } from "lucide-react";
+import { ChevronDown, ScanLine, LogIn, LogOut } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { BottomNav, NavKey } from "@/components/booking/BottomNav";
 import { FloorMap } from "@/components/booking/FloorMap";
 import { Desk, Room } from "@/types/booking";
 import { TeacherPanel } from "@/components/booking/TeacherPanel";
-import { LessonConfigModal } from "@/components/booking/LessonConfigModal";
+
 
 interface WorkspaceScreenProps {
   room: Room;
@@ -15,7 +15,8 @@ interface WorkspaceScreenProps {
   onDeskClick: (desk: Desk) => void;
   onOpenRooms: () => void;
   onNavigate: (key: NavKey) => void;
-  onRoomUpdate: (room: Room) => void;
+  onLeaveRoom?: () => void;
+
   isAdmin?: boolean;
   userRole?: string;
 }
@@ -28,11 +29,12 @@ export const WorkspaceScreen = ({
   onDeskClick,
   onOpenRooms,
   onNavigate,
-  onRoomUpdate,
+  onLeaveRoom,
+
   isAdmin = false,
   userRole = "student",
 }: WorkspaceScreenProps) => {
-  const [configOpen, setConfigOpen] = useState(false);
+
   const isTeacher = userRole === "teacher" || isAdmin;
 
   return (
@@ -41,7 +43,7 @@ export const WorkspaceScreen = ({
         <h1 className="text-base font-semibold">Мои места</h1>
       </header>
 
-      <div className="px-5 md:px-8 flex items-center justify-between">
+      <div className="px-5 md:px-8 flex items-center justify-between gap-3">
         <button
           onClick={onOpenRooms}
           className="inline-flex items-center gap-1 text-sm font-medium text-foreground py-1"
@@ -50,17 +52,17 @@ export const WorkspaceScreen = ({
           <ChevronDown className="w-4 h-4 text-muted-foreground" />
         </button>
 
-        {isTeacher && isInRoom && (
-           <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setConfigOpen(true)}
-            className="h-8 rounded-lg text-[10px] font-bold uppercase tracking-wider text-primary hover:text-primary hover:bg-primary/5 gap-1.5"
-           >
-             <Settings2 className="w-3.5 h-3.5" />
-             Настроить урок
-           </Button>
+        {isTeacher && isInRoom && onLeaveRoom && (
+          <button
+            onClick={onLeaveRoom}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted hover:bg-muted/80 transition-colors text-sm font-semibold"
+            title="Выйти из кабинета"
+          >
+            <LogOut className="w-4 h-4 text-muted-foreground" />
+            Выйти
+          </button>
         )}
+
       </div>
 
       {!isAdmin && !isInRoom ? (
@@ -101,19 +103,14 @@ export const WorkspaceScreen = ({
           </div>
 
           {isTeacher && isInRoom && (
-            <TeacherPanel onOpenConfig={() => setConfigOpen(true)} />
+            <TeacherPanel roomId={room.id} />
           )}
         </div>
       )}
 
       <BottomNav active="map" isAdmin={isAdmin} onNavigate={onNavigate} />
 
-      <LessonConfigModal 
-        open={configOpen} 
-        onClose={() => setConfigOpen(false)} 
-        room={room}
-        onUpdate={onRoomUpdate}
-      />
+
     </div>
   );
 };

@@ -7,14 +7,13 @@ import { Booking } from "@/types/booking";
 
 interface Props {
   bookings: Booking[];
-  exitMode: "password" | "teacher";
   userRole: string;
   onExitSuccess: (id: string) => void;
   onScan: () => void;
   onNavigate: (key: NavKey) => void;
 }
 
-export const BookingsScreen = ({ bookings, exitMode, userRole, onExitSuccess, onScan, onNavigate }: Props) => {
+export const BookingsScreen = ({ bookings, userRole, onExitSuccess, onScan, onNavigate }: Props) => {
   const active = bookings.filter((b) => b.status === "active");
   const [exitModalOpen, setExitModalOpen] = useState(false);
   const [exitTargetId, setExitTargetId] = useState<string | null>(null);
@@ -72,7 +71,7 @@ export const BookingsScreen = ({ bookings, exitMode, userRole, onExitSuccess, on
               variant="outline"
               className="mt-4 w-full h-10 rounded-xl border-destructive/30 text-destructive hover:bg-destructive/5 hover:text-destructive"
             >
-              {userRole === "student" ? (exitMode === "password" ? "Выйти (пароль)" : "Запросить выход") : "Освободить"}
+              {userRole === "student" ? "Запросить выход" : "Освободить"}
             </Button>
           </article>
         ))}
@@ -82,7 +81,7 @@ export const BookingsScreen = ({ bookings, exitMode, userRole, onExitSuccess, on
 
       <ExitModal
         open={exitModalOpen}
-        exitMode={exitMode}
+
         onExitSuccess={() => {
           setExitModalOpen(false);
           if (exitTargetId) onExitSuccess(exitTargetId);

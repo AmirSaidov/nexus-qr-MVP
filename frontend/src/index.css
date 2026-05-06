@@ -70,6 +70,7 @@ All colors MUST be HSL.
     --popover: 0 0% 8%;
     --popover-foreground: 0 0% 98%;
 
+    /* White accents */
     --primary: 0 0% 98%;
     --primary-foreground: 0 0% 6%;
     --primary-soft: 0 0% 14%;

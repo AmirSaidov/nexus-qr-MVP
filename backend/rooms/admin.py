@@ -29,13 +29,13 @@ def release_all_students(modeladmin, request, queryset):
 
 @admin.register(Room)
 class RoomAdmin(ModelAdmin):
-    list_display = ('name', 'exit_mode', 'qr_code', 'created_at')
+    list_display = ('name', 'qr_code', 'created_at')
     actions = [release_all_students]
 
 
 @admin.register(Place)
 class PlaceAdmin(ModelAdmin):
-    list_display = ('number', 'room', 'status', 'user')
+    list_display = ('number', 'room', 'status', 'confirmation_status', 'user')
     list_filter = ('room', 'status')
     ordering = ('room', 'number')
 

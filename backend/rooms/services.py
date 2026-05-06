@@ -37,6 +37,7 @@ def release_place(place_id):
         place.user = None
         place.status = 'free'
         place.occupied_at = None
+        place.confirmation_status = None
         place.save()
 
         return place, history, None
@@ -59,6 +60,7 @@ def occupy_specific_place(user_id, place_id):
         place.user = user
         place.status = 'occupied'
         place.occupied_at = timezone.now()
+        place.confirmation_status = 'pending'
         place.save()
 
         user.is_in_room = True

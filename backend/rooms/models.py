@@ -26,12 +26,6 @@ class Room(models.Model):
     name = models.CharField(max_length=255)
     qr_code = models.CharField(max_length=255, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    EXIT_MODES = [
-        ('password', 'По паролю'),
-        ('teacher', 'Через преподавателя'),
-    ]
-    exit_mode = models.CharField(max_length=20, choices=EXIT_MODES, default='password')
-    exit_password = models.CharField(max_length=50, blank=True, null=True)
 
     def __str__(self):
         return self.name
@@ -41,10 +35,17 @@ class Place(models.Model):
         ('free', 'Free'),
         ('occupied', 'Occupied'),
     ]
+    CONFIRMATION_CHOICES = [
+        ('pending', 'Ожидает подтверждения'),
+        ('confirmed', 'Подтверждён'),
+    ]
 
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='places')
     number = models.IntegerField()
+    x = models.IntegerField(default=0)
+    y = models.IntegerField(default=0)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='free')
+    confirmation_status = models.CharField(max_length=10, choices=CONFIRMATION_CHOICES, null=True, blank=True)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     occupied_at = models.DateTimeField(null=True, blank=True)
 
@@ -100,3 +101,43 @@ class ExitRequest(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.room.name} ({self.status})"
+
+
+class AdminLog(models.Model):
+    ACTION_CHOICES = [
+        ('scan', 'QR Scan'),
+        ('confirmed', 'Confirmed'),
+        ('rejected', 'Rejected'),
+        ('room_created', 'Room Created'),
+        ('room_deleted', 'Room Deleted'),
+        ('place_created', 'Place Created'),
+        ('place_deleted', 'Place Deleted'),
+    ]
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='admin_log_user')
+    teacher = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='admin_log_teacher')
+    room = models.ForeignKey(Room, on_delete=models.SET_NULL, null=True, blank=True)
+    place = models.ForeignKey(Place, on_delete=models.SET_NULL, null=True, blank=True)
+    details = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Admin Log"
+        verbose_name_plural = "Admin Logs"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.action} - {self.created_at}"
+
+
+class RoomEntryHistory(models.Model):
+    """Tracks teacher/admin entering and leaving rooms."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='room_entries')
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='entry_history')
+    entered_at = models.DateTimeField(auto_now_add=True)
+    left_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Room Entry"
+        verbose_name_plural = "Room Entries"
+        ordering = ['-entered_at']

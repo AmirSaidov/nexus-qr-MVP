@@ -1,4 +1,4 @@
-import { LogOut, ChevronRight, MapPin, ChevronDown, ShieldCheck, GraduationCap, Shield } from "lucide-react";
+import { LogOut, ChevronRight, MapPin, ChevronDown, ShieldCheck, GraduationCap, Shield, LayoutDashboard } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { BottomNav, NavKey } from "@/components/booking/BottomNav";
@@ -7,7 +7,7 @@ import { UserProfile, Room } from "@/types/booking";
 interface Props {
   user: UserProfile;
   onLogout: () => void;
-  onNavigate: (key: NavKey) => void;
+  onNavigate: (key: NavKey | string) => void;
   isAdmin?: boolean;
 }
 
@@ -62,6 +62,17 @@ export const ProfileScreen = ({ user, isAdmin = false, onLogout, onNavigate }: P
             </div>
           </section>
         </div>
+
+        {/* Admin Panel Button */}
+        {(isAdmin || user.role === "admin") && (
+          <Button
+            onClick={() => onNavigate("admin_dashboard")}
+            className="w-full h-12 rounded-xl gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white border-0 shadow-lg shadow-violet-500/20"
+          >
+            <LayoutDashboard className="w-4 h-4" />
+            Admin Panel
+          </Button>
+        )}
 
         <Button
           onClick={onLogout}

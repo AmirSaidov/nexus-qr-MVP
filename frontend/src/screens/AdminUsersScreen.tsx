@@ -9,21 +9,25 @@ interface AdminUsersScreenProps {
 export const AdminUsersScreen = ({ onBack }: AdminUsersScreenProps) => {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
+    setError(null);
     fetchAdminUsers()
       .then((data) => {
         if (Array.isArray(data)) {
           setUsers(data);
         }
       })
-      .catch(() => {})
+      .catch((e: any) => {
+        setError(e?.message || "Failed to load users");
+      })
       .finally(() => setLoading(false));
   }, []);
 
-  const filteredUsers = users.filter(u => 
-    (u.name || "").toLowerCase().includes(search.toLowerCase()) || 
+  const filteredUsers = users.filter(u =>
+    (u.name || "").toLowerCase().includes(search.toLowerCase()) ||
     (u.email || "").toLowerCase().includes(search.toLowerCase())
   );
 
@@ -57,6 +61,8 @@ export const AdminUsersScreen = ({ onBack }: AdminUsersScreenProps) => {
       <div className="flex-1 px-5 md:px-8 pt-2 pb-6 space-y-3 overflow-y-auto">
         {loading ? (
           <div className="text-center text-sm text-muted-foreground mt-8">Загрузка...</div>
+        ) : error ? (
+          <div className="text-center text-sm text-destructive mt-8">{error}</div>
         ) : filteredUsers.length === 0 ? (
           <div className="text-center text-sm text-muted-foreground mt-8">Ничего не найдено</div>
         ) : (
@@ -72,7 +78,7 @@ export const AdminUsersScreen = ({ onBack }: AdminUsersScreenProps) => {
                 <div className="min-w-0 flex-1">
                   <h2 className="text-sm font-semibold truncate">{u.name || "Без имени"}</h2>
                   <p className="text-xs text-muted-foreground truncate">{u.email}</p>
-                  
+
                   {u.place ? (
                     <div className="mt-2 inline-flex items-center gap-1.5 bg-primary/10 text-primary px-2.5 py-1 rounded-full text-[10px] font-medium">
                       <MapPin className="w-3 h-3" />

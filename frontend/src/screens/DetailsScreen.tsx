@@ -13,7 +13,6 @@ interface DetailsScreenProps {
   onRelease: () => void;
   onExitSuccess: (id: string) => void;
   userRole?: string;
-  exitMode?: "password" | "teacher";
   isAdmin?: boolean;
 }
 
@@ -25,7 +24,6 @@ export const DetailsScreen = ({
   onRelease,
   onExitSuccess,
   userRole = "student",
-  exitMode = "password",
   isAdmin = false,
 }: DetailsScreenProps) => {
   const [exitModalOpen, setExitModalOpen] = useState(false);
@@ -80,15 +78,27 @@ export const DetailsScreen = ({
             </div>
           )}
 
-          {isMine && isStudent && (
-             <div className="mt-6 p-3 rounded-xl bg-secondary/50 border border-border flex items-center gap-3">
-               <div className="w-8 h-8 rounded-full bg-orange-500/10 flex items-center justify-center">
-                 <Lock className="w-4 h-4 text-orange-500" />
-               </div>
-               <p className="text-xs text-muted-foreground leading-tight">
-                 Для освобождения места необходимо подтверждение выхода
-               </p>
-             </div>
+          {/* Confirmation status for student's own desk */}
+          {isMine && isStudent && desk.confirmationStatus === "pending" && (
+            <div className="mt-6 p-3 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-orange-500/10 flex items-center justify-center">
+                <Lock className="w-4 h-4 text-orange-500" />
+              </div>
+              <p className="text-xs text-orange-600 leading-tight font-medium">
+                Ожидает подтверждения преподавателем
+              </p>
+            </div>
+          )}
+
+          {isMine && isStudent && desk.confirmationStatus === "confirmed" && (
+            <div className="mt-6 p-3 rounded-xl bg-success/10 border border-success/20 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-success/10 flex items-center justify-center">
+                <Lock className="w-4 h-4 text-success" />
+              </div>
+              <p className="text-xs text-success leading-tight font-medium">
+                Присутствие подтверждено ✓
+              </p>
+            </div>
           )}
         </div>
       </div>
@@ -98,7 +108,7 @@ export const DetailsScreen = ({
           isStudent ? (
             <Button
               onClick={() => setExitModalOpen(true)}
-              className="h-12 rounded-xl text-base font-semibold shadow-button bg-orange-500 hover:bg-orange-600"
+              className="h-12 rounded-xl text-base font-semibold shadow-button bg-white text-black hover:bg-white/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
             >
               Запросить выход
             </Button>
@@ -112,7 +122,7 @@ export const DetailsScreen = ({
             </Button>
           )
         ) : (
-          !isAdmin ? (
+          !isAdmin && isStudent ? (
             <Button
               onClick={onBook}
               disabled={!isAvailable}
@@ -134,7 +144,6 @@ export const DetailsScreen = ({
       <ExitModal
         open={exitModalOpen}
         onClose={() => setExitModalOpen(false)}
-        exitMode={exitMode}
         onExitSuccess={() => onExitSuccess(String(desk.id))}
       />
     </div>

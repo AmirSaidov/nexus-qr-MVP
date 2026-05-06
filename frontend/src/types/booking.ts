@@ -11,6 +11,7 @@ export interface Desk {
   h?: number;
   occupiedAt?: string;
   occupantName?: string;
+  confirmationStatus?: "pending" | "confirmed" | null;
 }
 
 export interface Room {
@@ -18,8 +19,6 @@ export interface Room {
   name: string;
   floor: number;
   desks: Desk[];
-  exitMode?: "password" | "teacher";
-  exitPassword?: string;
 }
 
 export type Screen =
@@ -36,7 +35,12 @@ export type Screen =
   | "notifications"
   | "rooms"
   | "admin_users"
-  | "admin_history";
+  | "admin_history"
+  | "admin_dashboard"
+  | "admin_rooms"
+  | "admin_layout"
+  | "admin_logs"
+  | "admin_rejected";
 
 export interface Booking {
   id: string;

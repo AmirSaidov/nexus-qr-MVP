@@ -1,14 +1,14 @@
-import { useState } from "react";
-import { Check } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Check, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ExitModal } from "@/components/booking/ExitModal";
 import { Desk, Room } from "@/types/booking";
+import { apiJson } from "@/lib/api";
 
 interface SuccessScreenProps {
   desk: Desk;
   room: Room;
   startTime: string;
-  exitMode: "password" | "teacher";
   userRole: string;
   onRelease: () => void;
   onExitSuccess: () => void;
@@ -19,13 +19,33 @@ export const SuccessScreen = ({
   desk,
   room,
   startTime,
-  exitMode,
   userRole,
   onRelease,
   onExitSuccess,
   onHome,
 }: SuccessScreenProps) => {
   const [exitModalOpen, setExitModalOpen] = useState(false);
+  const [confirmationStatus, setConfirmationStatus] = useState<"pending" | "confirmed" | null>(
+    desk.confirmationStatus || "pending"
+  );
+
+  // Poll confirmation status every 3s for students
+  useEffect(() => {
+    if (userRole !== "student" || !desk.dbId) return;
+
+    const poll = async () => {
+      try {
+        const places = await apiJson<any[]>(`/api/rooms/${room.id}/places`);
+        const myPlace = places.find((p: any) => p.id === desk.dbId);
+        if (myPlace?.confirmation_status) {
+          setConfirmationStatus(myPlace.confirmation_status);
+        }
+      } catch { }
+    };
+
+    const interval = setInterval(poll, 3000);
+    return () => clearInterval(interval);
+  }, [userRole, desk.dbId, room.id]);
 
   const handleExitClick = () => {
     if (userRole === "teacher" || userRole === "admin") {
@@ -37,9 +57,7 @@ export const SuccessScreen = ({
 
   const exitLabel =
     userRole === "student"
-      ? exitMode === "password"
-        ? "Выйти (ввести пароль)"
-        : "Запросить выход"
+      ? "Запросить выход"
       : "Освободить место";
 
   return (
@@ -64,12 +82,22 @@ export const SuccessScreen = ({
           <p className="mt-1 text-2xl font-semibold tabular-nums">{startTime}</p>
         </div>
 
-        {userRole === "student" && (
-          <p className="mt-6 text-xs text-muted-foreground bg-secondary px-4 py-2 rounded-xl">
-            {exitMode === "password"
-              ? "🔒 Для выхода из кабинета потребуется пароль преподавателя"
-              : "🔒 Для выхода необходимо разрешение преподавателя"}
-          </p>
+        {userRole === "student" && confirmationStatus === "pending" && (
+          <div className="mt-6 w-full flex items-center gap-3 bg-orange-500/10 px-4 py-3 rounded-xl border border-orange-500/20 animate-in fade-in duration-300">
+            <Clock className="w-5 h-5 text-orange-500 shrink-0" />
+            <p className="text-xs text-orange-600 text-left font-medium leading-tight">
+              Ожидает подтверждения преподавателем. Оставайтесь на месте.
+            </p>
+          </div>
+        )}
+
+        {userRole === "student" && confirmationStatus === "confirmed" && (
+          <div className="mt-6 w-full flex items-center gap-3 bg-success/10 px-4 py-3 rounded-xl border border-success/20 animate-in fade-in duration-300">
+            <Check className="w-5 h-5 text-success shrink-0" />
+            <p className="text-xs text-success text-left font-medium leading-tight">
+              Преподаватель подтвердил ваше присутствие
+            </p>
+          </div>
         )}
       </div>
 
@@ -91,7 +119,6 @@ export const SuccessScreen = ({
 
       <ExitModal
         open={exitModalOpen}
-        exitMode={exitMode}
         onExitSuccess={() => {
           setExitModalOpen(false);
           onExitSuccess();

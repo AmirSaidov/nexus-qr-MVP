@@ -10,12 +10,16 @@ import { SuccessScreen } from "@/screens/SuccessScreen";
 import { BookingsScreen } from "@/screens/BookingsScreen";
 import { AdminUsersScreen } from "@/screens/AdminUsersScreen";
 import { AdminHistoryScreen } from "@/screens/AdminHistoryScreen";
+import { AdminDashboardScreen } from "@/screens/AdminDashboardScreen";
+import { AdminRoomsScreen } from "@/screens/AdminRoomsScreen";
+import { LayoutEditorScreen } from "@/screens/LayoutEditorScreen";
+import { AdminRejectedScreen } from "@/screens/AdminRejectedScreen";
 import { ProfileScreen } from "@/screens/ProfileScreen";
 import { RoomsScreen } from "@/screens/RoomsScreen";
 import { NavKey } from "@/components/booking/BottomNav";
 import { ScannerModal } from "@/components/qr/ScannerModal";
 import { login, register, getUserProfile, updateUserProfile, logout } from "@/lib/auth";
-import { occupyPlace, fetchRoomPlaces, fetchRooms, releasePlace } from "@/lib/places";
+import { occupyPlace, fetchRoomPlaces, fetchRooms, releasePlace, leaveRoom } from "@/lib/places";
 import { apiJson, getAuthToken } from "@/lib/api";
 
 import {
@@ -25,76 +29,6 @@ import {
   Screen,
   UserProfile,
 } from "@/types/booking";
-
-const initialRooms: Room[] = [
-  {
-    id: "401",
-    name: "Кабинет 401",
-    floor: 4,
-    desks: [
-      // Top row — 4 horizontal desks
-      { id: 1, status: "available", col: 2, row: 1, w: 2 },
-      { id: 2, status: "available", col: 4, row: 1, w: 2 },
-      { id: 3, status: "available", col: 6, row: 1, w: 2 },
-      { id: 4, status: "available", col: 8, row: 1, w: 2 },
-      // Left column — 2 vertical desks
-      { id: 5, status: "available", col: 1, row: 3, h: 2 },
-      { id: 6, status: "available", col: 1, row: 5, h: 2 },
-      // Right column — 3 vertical desks
-      { id: 7, status: "available", col: 10, row: 3, h: 2 },
-      { id: 8, status: "available", col: 10, row: 5, h: 2 },
-      { id: 9, status: "available", col: 10, row: 7, h: 2 },
-    ],
-  },
-  {
-    id: "407",
-    name: "Кабинет 407",
-    floor: 4,
-    desks: [
-      // Top row — 1 small portrait + 3 wide desks
-      { id: 1, status: "available", col: 2, row: 1, h: 2 },
-      { id: 2, status: "available", col: 3, row: 1, w: 2 },
-      { id: 3, status: "available", col: 5, row: 1, w: 2 },
-      { id: 4, status: "available", col: 7, row: 1, w: 2 },
-      // Left column — 2 portrait + 1 landscape at bottom
-      { id: 5, status: "available", col: 1, row: 3, h: 2 },
-      { id: 6, status: "available", col: 1, row: 5, h: 2 },
-      { id: 7, status: "available", col: 1, row: 7, w: 2 },
-      // Center — 1 portrait + 1 landscape
-      { id: 8, status: "available", col: 5, row: 3, h: 2 },
-      { id: 9, status: "available", col: 4, row: 5, w: 2 },
-      // Right column — 3 desks
-      { id: 10, status: "available", col: 9, row: 3, h: 2 },
-      { id: 11, status: "available", col: 9, row: 5, h: 2 },
-      { id: 12, status: "available", col: 9, row: 7, h: 2 },
-    ],
-  },
-  {
-    id: "302",
-    name: "Кабинет 302",
-    floor: 3,
-    desks: [
-      { id: 1, status: "available", col: 1, row: 1, w: 2 },
-      { id: 2, status: "available", col: 3, row: 1, w: 2 },
-      { id: 3, status: "available", col: 5, row: 1, w: 2 },
-      { id: 4, status: "available", col: 1, row: 3, w: 2 },
-      { id: 5, status: "available", col: 3, row: 3, w: 2 },
-      { id: 6, status: "available", col: 5, row: 3, w: 2 },
-    ],
-  },
-  {
-    id: "210",
-    name: "Кабинет 210",
-    floor: 2,
-    desks: [
-      { id: 1, status: "available", col: 1, row: 1, h: 2 },
-      { id: 2, status: "available", col: 3, row: 1, w: 2 },
-      { id: 3, status: "available", col: 5, row: 1, w: 2 },
-      { id: 4, status: "available", col: 1, row: 3, w: 2 },
-      { id: 5, status: "available", col: 4, row: 3, w: 3 },
-    ],
-  },
-];
 
 const initialUser: UserProfile = {
   name: "Иван Петров",
@@ -112,26 +46,86 @@ const nowHM = () => {
 };
 
 const Index = () => {
-  const [screen, setScreen] = useState<Screen>(getAuthToken() ? "workspace" : "login");
+  const PERSIST_KEY = "nexus_screen_state_v1";
+  type PersistedState = {
+    screen?: Screen;
+    currentRoomId?: string | null;
+    scannedDeskId?: number | null;
+    bookingTime?: string;
+    layoutRoomId?: number | null;
+    layoutRoomName?: string;
+  };
+
+  const readPersisted = (): PersistedState => {
+    try {
+      const raw = sessionStorage.getItem(PERSIST_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as PersistedState;
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const pickInitialScreen = (): Screen => {
+    if (!getAuthToken()) return "login";
+    const persisted = readPersisted();
+    const s = persisted.screen ?? "workspace";
+
+    // Don’t restore transient/invalid screens
+    if (s === "scanner") return "workspace";
+    if ((s === "details" || s === "success") && persisted.scannedDeskId == null) return "workspace";
+    if (s === "admin_layout" && persisted.layoutRoomId == null) return "admin_rooms";
+
+    return s;
+  };
+
+  const [screen, setScreen] = useState<Screen>(() => pickInitialScreen());
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
-  const [scannedDeskId, setScannedDeskId] = useState<number | null>(null);
+  const [currentRoomId, setCurrentRoomId] = useState<string | null>(() => {
+    if (!getAuthToken()) return null;
+    return readPersisted().currentRoomId ?? null;
+  });
+  const [scannedDeskId, setScannedDeskId] = useState<number | null>(() => {
+    if (!getAuthToken()) return null;
+    const v = readPersisted().scannedDeskId;
+    return typeof v === "number" ? v : null;
+  });
   const [, setScannedData] = useState<string | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [user, setUser] = useState<UserProfile>(initialUser);
-  const [bookingTime, setBookingTime] = useState<string>("");
+  const [bookingTime, setBookingTime] = useState<string>(() => {
+    if (!getAuthToken()) return "";
+    return readPersisted().bookingTime ?? "";
+  });
   const [isInRoom, setIsInRoom] = useState(false);
+  const [layoutRoomId, setLayoutRoomId] = useState<number | null>(() => {
+    if (!getAuthToken()) return null;
+    const v = readPersisted().layoutRoomId;
+    return typeof v === "number" ? v : null;
+  });
+  const [layoutRoomName, setLayoutRoomName] = useState<string>(() => {
+    if (!getAuthToken()) return "";
+    return readPersisted().layoutRoomName ?? "";
+  });
 
   const room = useMemo(
-    () => rooms.find((r) => r.id === currentRoomId) ?? rooms[0] ?? initialRooms[0],
+    () =>
+      rooms.find((r) => r.id === currentRoomId) ??
+      rooms[0] ?? {
+        id: currentRoomId ?? "",
+        name: "",
+        floor: 1,
+        desks: [],
+      },
     [rooms, currentRoomId]
   );
   const myDeskId = useMemo(() => {
     const mine = room.desks.find((d) => d.status === "mine");
     return mine ? mine.id : null;
   }, [room.desks]);
-  
+
   const hasActiveBooking = useMemo(() => {
     return bookings.some(b => b.status === "active");
   }, [bookings]);
@@ -152,8 +146,30 @@ const Index = () => {
     return () => window.removeEventListener("auth:unauthorized", handler);
   }, []);
 
+  // Persist current screen/state so refresh (F5) stays on the same page
   useEffect(() => {
-    if (screen === "workspace" || screen === "profile") {
+    if (!getAuthToken()) {
+      try { sessionStorage.removeItem(PERSIST_KEY); } catch { }
+      return;
+    }
+
+    const next: PersistedState = {
+      screen,
+      currentRoomId,
+      scannedDeskId,
+      bookingTime,
+      layoutRoomId,
+      layoutRoomName,
+    };
+    try {
+      sessionStorage.setItem(PERSIST_KEY, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  }, [screen, currentRoomId, scannedDeskId, bookingTime, layoutRoomId, layoutRoomName]);
+
+  useEffect(() => {
+    if (getAuthToken()) {
       getUserProfile()
         .then((data) => {
           if (data && data.email) {
@@ -165,22 +181,19 @@ const Index = () => {
             }
           }
         })
-        .catch(() => {});
+        .catch(() => { });
 
       fetchRooms()
         .then((data) => {
           if (Array.isArray(data)) {
             setRooms((rs) => {
               const updatedRooms = data.map((apiRoom) => {
-                const apiName = apiRoom.name.toLowerCase();
-                const existing = rs.find((r) => r.id === String(apiRoom.id)) ||
-                                 initialRooms.find((r) => apiName.includes(r.id) || r.name.toLowerCase().includes(apiName));
+                const existing = rs.find((r) => r.id === String(apiRoom.id));
                 return {
                   id: String(apiRoom.id),
                   name: apiRoom.name,
                   floor: existing?.floor || 1,
                   desks: existing?.desks || [],
-                  exitMode: apiRoom.exit_mode as "password" | "teacher" || "password",
                 };
               });
               if (!currentRoomId && updatedRooms.length > 0) {
@@ -192,7 +205,7 @@ const Index = () => {
             });
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [screen]);
 
@@ -203,40 +216,33 @@ const Index = () => {
           setRooms((rs) =>
             rs.map((r) => {
               if (r.id !== currentRoomId) return r;
-              
-              // If room had no layout (created via admin), generate simple grid
-              let desks = [...r.desks];
-              if (desks.length === 0 && places.length > 0) {
-                desks = places.map((p: any, i: number) => ({
-                  id: p.number,
-                  status: "available",
-                  col: (i % 6) + 1,
-                  row: Math.floor(i / 6) * 2 + 1,
-                }));
-              }
 
-              const newDesks = desks.map((desk) => {
-                const p = places.find((x: any) => x.number === desk.id);
-                if (p) {
-                  let st: Desk["status"] = "available";
-                  if (p.status === "booked" || p.backend_status === "occupied") {
-                    st = p.user?.id === user?.id ? "mine" : "occupied";
-                  }
-                  return { 
-                    ...desk, 
-                    dbId: p.id, 
-                    status: st,
-                    occupiedAt: p.occupied_at,
-                    occupantName: p.user?.name || p.user_name || undefined
-                  };
+              const newDesks: Desk[] = (places ?? []).map((p: any, i: number) => {
+                const x = typeof p.x === "number" ? p.x : i % 4;
+                const y = typeof p.y === "number" ? p.y : Math.floor(i / 4);
+
+                let st: Desk["status"] = "available";
+                if (p.status === "booked" || p.backend_status === "occupied") {
+                  st = p.user?.id === user?.id ? "mine" : "occupied";
                 }
-                return desk;
+
+                return {
+                  id: p.number,
+                  dbId: p.id,
+                  status: st,
+                  col: x + 1,
+                  row: y + 1,
+                  occupiedAt: p.occupied_at,
+                  occupantName: p.user?.name || p.user_name || undefined,
+                  confirmationStatus: p.confirmation_status || null,
+                };
               });
+
               return { ...r, desks: newDesks };
             })
           );
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [screen, currentRoomId, user?.id]);
 
@@ -385,11 +391,47 @@ const Index = () => {
     setScreen("details");
   };
 
-  const handleNavigate = (key: NavKey) => {
+  const isAdmin = !!(user?.is_staff || user?.role === "admin");
+  const isTeacher = (user?.role || "student") === "teacher" || isAdmin;
+
+  const handleLeaveRoom = async () => {
+    if (!confirm("Выйти из кабинета?")) return;
+    try {
+      if (myDeskId) {
+        await releasePlace(myDeskId);
+      } else {
+        await leaveRoom();
+      }
+      setUser((prev) => ({
+        ...prev,
+        is_in_room: false,
+        current_room: null,
+        current_place: null,
+      }));
+      setScannedDeskId(null);
+      setScreen("workspace");
+      toast.success("Вы вышли из кабинета");
+    } catch {
+      toast.error("Не удалось выйти из кабинета");
+    }
+  };
+
+  const handleNavigate = (key: NavKey | string) => {
     if (key === "map") setScreen("workspace");
     if (key === "profile") setScreen("profile");
+
+    const isAdminKey = String(key).startsWith("admin_");
+    if (isAdminKey && !isAdmin) {
+      toast.error("Доступ только для администратора");
+      return;
+    }
+
     if (key === "admin_users") setScreen("admin_users");
     if (key === "admin_history") setScreen("admin_history");
+    if (key === "admin_dashboard") setScreen("admin_dashboard");
+    if (key === "admin_rooms") setScreen("admin_rooms");
+    if (key === "admin_logs") setScreen("admin_logs");
+    if (key === "admin_rejected") setScreen("admin_rejected");
   };
 
   const handleUpdateProfile = async (data: Partial<UserProfile>) => {
@@ -422,7 +464,7 @@ const Index = () => {
               try {
                 const profile = await getUserProfile();
                 setUser((prev) => ({ ...prev, ...profile }));
-              } catch {}
+              } catch { }
               setScreen("workspace");
             } catch (e) {
               const msg = e instanceof Error ? e.message : "Не удалось войти";
@@ -443,7 +485,7 @@ const Index = () => {
               try {
                 const profile = await getUserProfile();
                 setUser({ ...initialUser, ...profile });
-              } catch {}
+              } catch { }
               setScreen("workspace");
             } catch (e) {
               const msg = e instanceof Error ? e.message : "Не удалось зарегистрироваться";
@@ -465,19 +507,9 @@ const Index = () => {
           onDeskClick={handleDeskClick}
           onOpenRooms={() => setScreen("rooms")}
           onNavigate={handleNavigate}
-          isAdmin={user?.is_staff}
+          onLeaveRoom={isTeacher ? handleLeaveRoom : undefined}
+          isAdmin={isAdmin}
           userRole={user?.role || "student"}
-          onRoomUpdate={(apiRoom: any) => {
-            setRooms(prev => prev.map(r => 
-              r.id === String(apiRoom.id) 
-                ? { 
-                    ...r, 
-                    exitMode: apiRoom.exit_mode, 
-                    exitPassword: apiRoom.exit_password 
-                  } 
-                : r
-            ));
-          }}
         />
       )}
       {screen === "details" && scannedDesk && (
@@ -488,9 +520,9 @@ const Index = () => {
           onBook={handleBook}
           onRelease={handleRelease}
           userRole={user?.role || "student"}
-          exitMode={room.exitMode || "password"}
+
           onExitSuccess={handleExitComplete}
-          isAdmin={user?.is_staff}
+          isAdmin={isAdmin}
         />
       )}
       {screen === "success" && scannedDesk && (
@@ -498,7 +530,7 @@ const Index = () => {
           desk={scannedDesk}
           room={room}
           startTime={bookingTime}
-          exitMode={room.exitMode || "password"}
+
           userRole={user?.role || "student"}
           onRelease={handleRelease}
           onExitSuccess={handleExitComplete}
@@ -511,12 +543,40 @@ const Index = () => {
       {screen === "admin_history" && (
         <AdminHistoryScreen onBack={() => setScreen("workspace")} />
       )}
+      {screen === "admin_dashboard" && (
+        <AdminDashboardScreen
+          onBack={() => setScreen("workspace")}
+          onNavigate={handleNavigate}
+        />
+      )}
+      {screen === "admin_rooms" && (
+        <AdminRoomsScreen
+          onBack={() => setScreen("admin_dashboard")}
+          onOpenLayout={(roomId) => {
+            setLayoutRoomId(roomId);
+            setScreen("admin_layout");
+          }}
+        />
+      )}
+      {screen === "admin_layout" && layoutRoomId && (
+        <LayoutEditorScreen
+          roomId={layoutRoomId}
+          roomName={layoutRoomName}
+          onBack={() => setScreen("admin_rooms")}
+        />
+      )}
+      {screen === "admin_logs" && (
+        <AdminLogsScreen onBack={() => setScreen("admin_dashboard")} />
+      )}
+      {screen === "admin_rejected" && (
+        <AdminRejectedScreen onBack={() => setScreen("admin_dashboard")} />
+      )}
       {screen === "profile" && (
         <ProfileScreen
           user={user}
           onLogout={handleLogout}
           onNavigate={handleNavigate}
-          isAdmin={user?.is_staff}
+          isAdmin={isAdmin}
         />
       )}
 
