@@ -1,19 +1,27 @@
-import { ChevronDown, ScanLine, LogIn, LogOut } from "lucide-react";
+import { ScanLine, LogIn, LogOut } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { BottomNav, NavKey } from "@/components/booking/BottomNav";
 import { FloorMap } from "@/components/booking/FloorMap";
 import { Desk, Room } from "@/types/booking";
 import { TeacherPanel } from "@/components/booking/TeacherPanel";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 
 interface WorkspaceScreenProps {
+  rooms: Room[];
   room: Room;
   myDeskId: number | null;
   isInRoom: boolean;
   onScan: () => void;
   onDeskClick: (desk: Desk) => void;
-  onOpenRooms: () => void;
+  onSelectRoom: (roomId: string) => void;
   onNavigate: (key: NavKey) => void;
   onLeaveRoom?: () => void;
 
@@ -22,12 +30,13 @@ interface WorkspaceScreenProps {
 }
 
 export const WorkspaceScreen = ({
+  rooms,
   room,
   myDeskId,
   isInRoom,
   onScan,
   onDeskClick,
-  onOpenRooms,
+  onSelectRoom,
   onNavigate,
   onLeaveRoom,
 
@@ -44,13 +53,20 @@ export const WorkspaceScreen = ({
       </header>
 
       <div className="px-5 md:px-8 flex items-center justify-between gap-3">
-        <button
-          onClick={onOpenRooms}
-          className="inline-flex items-center gap-1 text-sm font-medium text-foreground py-1"
-        >
-          {room.name}
-          <ChevronDown className="w-4 h-4 text-muted-foreground" />
-        </button>
+        <div className="min-w-0">
+          <Select value={room.id} onValueChange={onSelectRoom}>
+            <SelectTrigger className="h-9 rounded-xl border-border bg-card/40 px-3">
+              <SelectValue placeholder="Кабинет" />
+            </SelectTrigger>
+            <SelectContent>
+              {rooms.map((r) => (
+                <SelectItem key={r.id} value={r.id}>
+                  {r.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         {isTeacher && isInRoom && onLeaveRoom && (
           <button

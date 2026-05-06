@@ -999,9 +999,4 @@ class AdminRejectedView(APIView):
                 "place_number": log.place.number if log.place else None,
                 "created_at": log.created_at,
             })
-        return Response({
-            "count": qs.count(),
-            "next": (page + 1) if has_next else None,
-            "previous": (page - 1) if page > 1 else None,
-            "results": results,
-        })
+        return Response(data)

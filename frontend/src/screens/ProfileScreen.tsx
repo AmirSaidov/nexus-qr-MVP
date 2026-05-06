@@ -1,8 +1,16 @@
-import { LogOut, ChevronRight, MapPin, ChevronDown, ShieldCheck, GraduationCap, Shield, LayoutDashboard } from "lucide-react";
+import React from "react";
+import { LogOut, ChevronRight, ShieldCheck, GraduationCap, Shield, LayoutDashboard } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { BottomNav, NavKey } from "@/components/booking/BottomNav";
-import { UserProfile, Room } from "@/types/booking";
+import { UserProfile } from "@/types/booking";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Props {
   user: UserProfile;
@@ -13,7 +21,7 @@ interface Props {
 
 export const ProfileScreen = ({ user, isAdmin = false, onLogout, onNavigate }: Props) => {
   const { theme, setTheme } = useTheme();
-  
+
   return (
     <div className="flex-1 flex flex-col bg-background">
       <header className="px-5 md:px-8 pt-4 pb-3 text-center">
@@ -36,34 +44,32 @@ export const ProfileScreen = ({ user, isAdmin = false, onLogout, onNavigate }: P
         </section>
 
         <div className="pt-2">
-          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">Оформление</h2>
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">
+            Оформление
+          </h2>
           <section className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden flex flex-col">
             <div className="w-full flex items-center justify-between px-4 py-3.5 bg-card relative">
               <div>
                 <p className="text-sm font-medium">Тема приложения</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Светлая или тёмная тема</p>
               </div>
-              
-              <div className="relative border border-border rounded-lg px-3 py-1.5 flex items-center gap-2 bg-background">
-                <span className="text-sm font-medium pointer-events-none flex items-center gap-1.5">
-                  <span className="capitalize">{theme === 'light' ? '☀️ Светлая' : theme === 'dark' ? '🌙 Тёмная' : '💻 Системная'}</span>
-                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                </span>
-                <select
-                  value={theme}
-                  onChange={(e) => setTheme(e.target.value)}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                >
-                  <option value="light">Светлая</option>
-                  <option value="dark">Тёмная</option>
-                  <option value="system">Системная</option>
-                </select>
+
+              <div className="w-[170px]">
+                <Select value={theme ?? "system"} onValueChange={setTheme}>
+                  <SelectTrigger className="h-10 rounded-lg border-border bg-background">
+                    <SelectValue placeholder="Тема" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="light">Светлая</SelectItem>
+                    <SelectItem value="dark">Тёмная</SelectItem>
+                    <SelectItem value="system">Системная</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </section>
         </div>
 
-        {/* Admin Panel Button */}
         {(isAdmin || user.role === "admin") && (
           <Button
             onClick={() => onNavigate("admin_dashboard")}
@@ -90,29 +96,6 @@ export const ProfileScreen = ({ user, isAdmin = false, onLogout, onNavigate }: P
     </div>
   );
 };
-
-const Item = ({
-  icon,
-  label,
-  value,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value?: string;
-  onClick?: () => void;
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-border last:border-0 hover:bg-secondary transition-colors text-left"
-  >
-    <span className="text-muted-foreground">{icon}</span>
-    <span className="flex-1 text-sm font-medium">{label}</span>
-    {value && <span className="text-xs text-muted-foreground">{value}</span>}
-    <ChevronRight className="w-4 h-4 text-muted-foreground" />
-  </button>
-);
 
 const roleConfig = {
   student: { label: "Ученик", icon: GraduationCap, color: "bg-blue-500/10 text-blue-500" },

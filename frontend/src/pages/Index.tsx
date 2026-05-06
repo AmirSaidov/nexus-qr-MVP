@@ -12,6 +12,7 @@ import { AdminUsersScreen } from "@/screens/AdminUsersScreen";
 import { AdminHistoryScreen } from "@/screens/AdminHistoryScreen";
 import { AdminDashboardScreen } from "@/screens/AdminDashboardScreen";
 import { AdminRoomsScreen } from "@/screens/AdminRoomsScreen";
+import { AdminLogsScreen } from "@/screens/AdminLogsScreen";
 import { LayoutEditorScreen } from "@/screens/LayoutEditorScreen";
 import { AdminRejectedScreen } from "@/screens/AdminRejectedScreen";
 import { ProfileScreen } from "@/screens/ProfileScreen";
@@ -500,12 +501,16 @@ const Index = () => {
       )}
       {screen === "workspace" && currentRoomId && (
         <WorkspaceScreen
+          rooms={rooms}
           room={room}
           myDeskId={myDeskId}
           isInRoom={isInRoom}
           onScan={openWorkspaceScanner}
           onDeskClick={handleDeskClick}
-          onOpenRooms={() => setScreen("rooms")}
+          onSelectRoom={(id) => {
+            setCurrentRoomId(id);
+            setScreen("workspace");
+          }}
           onNavigate={handleNavigate}
           onLeaveRoom={isTeacher ? handleLeaveRoom : undefined}
           isAdmin={isAdmin}
