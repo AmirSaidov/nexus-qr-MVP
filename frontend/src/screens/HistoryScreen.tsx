@@ -45,10 +45,10 @@ export const HistoryScreen = ({ bookings, isAdmin = false, onNavigate, onClearHi
               <span
                 className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
                   b.status === "active"
-                    ? "bg-primary-soft text-primary"
+                    ? "bg-primary text-primary-foreground"
                     : b.status === "completed"
-                    ? "bg-secondary text-muted-foreground"
-                    : "bg-destructive-soft text-destructive"
+                    ? "bg-primary/10 text-primary"
+                    : "bg-destructive/10 text-destructive"
                 }`}
               >
                 {b.status === "active" ? "Активна" : b.status === "completed" ? "Завершена" : "Отменена"}

@@ -18,6 +18,8 @@ export interface Room {
   name: string;
   floor: number;
   desks: Desk[];
+  exitMode?: "password" | "teacher";
+  exitPassword?: string;
 }
 
 export type Screen =
@@ -65,4 +67,8 @@ export interface UserProfile {
   department: string;
   preferred_room?: string;
   is_staff?: boolean;
+  role?: "student" | "teacher" | "admin";
+  is_in_room?: boolean;
+  current_room?: number | null;
+  current_place?: number | null;
 }

@@ -33,7 +33,7 @@ export const LoginScreen = ({ onLogin, onRegister, onForgot }: LoginScreenProps)
           Вход в систему
         </h1>
         <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-          Войдите, чтобы забронировать
+          Войдите, чтобы занять место
           <br /> рабочее место
         </p>
       </header>

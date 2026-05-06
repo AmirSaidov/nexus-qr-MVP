@@ -20,3 +20,20 @@ export async function releasePlace(placeId: number) {
     method: "POST",
   });
 }
+
+export async function requestExit() {
+  return apiJson<{ success: boolean; message: string }>("/api/exit/request/", {
+    method: "POST",
+  });
+}
+
+export async function confirmExit(password: string) {
+  return apiJson<{ success: boolean; message: string }>("/api/exit/confirm/", {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+}
+
+export async function getExitStatus() {
+  return apiJson<{ success: boolean; status: string; exit_mode: string }>("/api/exit/status/");
+}

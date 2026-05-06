@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { PhoneFrame } from "@/components/booking/PhoneFrame";
-import { SideMenu } from "@/components/booking/SideMenu";
 import { LoginScreen } from "@/screens/LoginScreen";
 import { RegisterScreen } from "@/screens/RegisterScreen";
 import { ForgotPasswordScreen } from "@/screens/ForgotPasswordScreen";
@@ -9,19 +8,17 @@ import { WorkspaceScreen } from "@/screens/WorkspaceScreen";
 import { DetailsScreen } from "@/screens/DetailsScreen";
 import { SuccessScreen } from "@/screens/SuccessScreen";
 import { BookingsScreen } from "@/screens/BookingsScreen";
-import { HistoryScreen } from "@/screens/HistoryScreen";
 import { AdminUsersScreen } from "@/screens/AdminUsersScreen";
 import { AdminHistoryScreen } from "@/screens/AdminHistoryScreen";
 import { ProfileScreen } from "@/screens/ProfileScreen";
-import { NotificationsScreen } from "@/screens/NotificationsScreen";
 import { RoomsScreen } from "@/screens/RoomsScreen";
 import { NavKey } from "@/components/booking/BottomNav";
 import { ScannerModal } from "@/components/qr/ScannerModal";
-import { login, register, getUserProfile, updateUserProfile, fetchUserHistory, fetchGlobalHistory, clearUserHistory, logout } from "@/lib/auth";
+import { login, register, getUserProfile, updateUserProfile, logout } from "@/lib/auth";
 import { occupyPlace, fetchRoomPlaces, fetchRooms, releasePlace } from "@/lib/places";
-import { getAuthToken } from "@/lib/api";
+import { apiJson, getAuthToken } from "@/lib/api";
+
 import {
-  AppNotification,
   Booking,
   Desk,
   Room,
@@ -121,11 +118,10 @@ const Index = () => {
   const [scannedDeskId, setScannedDeskId] = useState<number | null>(null);
   const [, setScannedData] = useState<string | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [scanDeskTarget, setScanDeskTarget] = useState<number | null>(null);
-  const [deskQrValues, setDeskQrValues] = useState<Record<number, string>>({});
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [user, setUser] = useState<UserProfile>(initialUser);
   const [bookingTime, setBookingTime] = useState<string>("");
+  const [isInRoom, setIsInRoom] = useState(false);
 
   const room = useMemo(
     () => rooms.find((r) => r.id === currentRoomId) ?? rooms[0] ?? initialRooms[0],
@@ -162,59 +158,32 @@ const Index = () => {
         .then((data) => {
           if (data && data.email) {
             setUser((prev) => ({ ...prev, ...data }));
-            if (data.preferred_room) {
-              setCurrentRoomId(String(data.preferred_room));
+            // Sync is_in_room from server
+            setIsInRoom(!!data.is_in_room);
+            if (data.current_room) {
+              setCurrentRoomId(String(data.current_room));
             }
           }
         })
         .catch(() => {});
-        
-      fetchUserHistory()
-        .then((history) => {
-          if (Array.isArray(history)) {
-            const mappedBookings: Booking[] = history.map((h: any) => {
-               let st = "completed";
-               if (!h.end_time) st = "active";
-               
-               const sTime = new Date(h.start_time);
-               let eTime;
-               if (h.end_time) eTime = new Date(h.end_time);
 
-               return {
-                 id: String(h.id),
-                 deskId: h.place_number,
-                 dbId: h.place_id,
-                 roomId: String(h.room_id),
-                 roomName: h.room_name,
-                 floor: 1, // default
-                 date: sTime.toISOString().slice(0, 10),
-                 startTime: `${String(sTime.getHours()).padStart(2, "0")}:${String(sTime.getMinutes()).padStart(2, "0")}`,
-                 endTime: eTime ? `${String(eTime.getHours()).padStart(2, "0")}:${String(eTime.getMinutes()).padStart(2, "0")}` : undefined,
-                 status: st as any,
-               };
-            });
-            setBookings(mappedBookings);
-          }
-        })
-        .catch(() => {});
-        
       fetchRooms()
         .then((data) => {
           if (Array.isArray(data)) {
             setRooms((rs) => {
               const updatedRooms = data.map((apiRoom) => {
                 const apiName = apiRoom.name.toLowerCase();
-                const existing = rs.find((r) => r.id === String(apiRoom.id)) || 
+                const existing = rs.find((r) => r.id === String(apiRoom.id)) ||
                                  initialRooms.find((r) => apiName.includes(r.id) || r.name.toLowerCase().includes(apiName));
                 return {
                   id: String(apiRoom.id),
                   name: apiRoom.name,
                   floor: existing?.floor || 1,
                   desks: existing?.desks || [],
+                  exitMode: apiRoom.exit_mode as "password" | "teacher" || "password",
                 };
               });
               if (!currentRoomId && updatedRooms.length > 0) {
-                // Delay setting default room so user profile has a chance to set it first
                 setTimeout(() => {
                   setCurrentRoomId((prev) => prev || updatedRooms[0].id);
                 }, 100);
@@ -224,9 +193,7 @@ const Index = () => {
           }
         })
         .catch(() => {});
-        
     }
-
   }, [screen]);
 
   useEffect(() => {
@@ -305,44 +272,38 @@ const Index = () => {
   };
 
   const openWorkspaceScanner = () => {
-    setScanDeskTarget(null);
     setScannerOpen(true);
   };
 
-  const openDeskScanner = (deskId: number) => {
-    setScanDeskTarget(deskId);
-    setScannerOpen(true);
-  };
 
-  const handleDecoded = (decodedText: string) => {
+
+  const handleDecoded = async (decodedText: string) => {
     console.log(decodedText);
-    setScannedData(decodedText);
-    toast.success("QR считан");
     setScannerOpen(false);
 
-    if (scanDeskTarget !== null) {
-      setDeskQrValues((prev) => ({ ...prev, [scanDeskTarget]: decodedText }));
-      setScanDeskTarget(null);
-      return;
-    }
-
-    const maybeDeskId = parsePlaceIdFromQr(decodedText);
-    if (maybeDeskId !== null && room.desks.some((d) => d.id === maybeDeskId)) {
-      setScannedDeskId(maybeDeskId);
-      setDeskQrValues((prev) => ({ ...prev, [maybeDeskId]: decodedText }));
-      setScreen("details");
+    try {
+      const res = await apiJson<any>("/api/rooms/enter", {
+        method: "POST",
+        body: JSON.stringify({ qr_code: decodedText }),
+      });
+      if (res.success) {
+        setIsInRoom(true);
+        const roomId = String(res.room.id);
+        setCurrentRoomId(roomId);
+        setUser(prev => ({ ...prev, is_in_room: true, current_room: res.room.id }));
+        toast.success(`Вы вошли в ${res.room.name}`);
+      } else {
+        toast.error(res.message || "Не удалось войти в кабинет");
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "QR-код не распознан");
     }
   };
 
   const handleBook = () => {
     if (!scannedDesk) return;
     if (hasActiveBooking) {
-      toast.error("У вас уже есть активная бронь");
-      return;
-    }
-    const scannedForDesk = deskQrValues[scannedDesk.id] ?? null;
-    if (!scannedForDesk) {
-      toast.error("Сначала отсканируйте QR этого стола");
+      toast.error("Вы уже заняли место");
       return;
     }
     if (!scannedDesk.dbId) {
@@ -352,34 +313,9 @@ const Index = () => {
 
     void (async () => {
       try {
-        await occupyPlace(scannedDesk.dbId!, scannedForDesk);
-        
-        // Refresh history to get the active booking
-        const history = await fetchUserHistory();
-        if (Array.isArray(history)) {
-          const mappedBookings: Booking[] = history.map((h: any) => {
-             let st = "completed";
-             if (!h.end_time) st = "active";
-             const sTime = new Date(h.start_time);
-             let eTime;
-             if (h.end_time) eTime = new Date(h.end_time);
-             return {
-               id: String(h.id),
-               deskId: h.place_number,
-               dbId: h.place_id,
-               roomId: String(h.room_id),
-               roomName: h.room_name,
-               floor: 1,
-               date: sTime.toISOString().slice(0, 10),
-               startTime: `${String(sTime.getHours()).padStart(2, "0")}:${String(sTime.getMinutes()).padStart(2, "0")}`,
-               endTime: eTime ? `${String(eTime.getHours()).padStart(2, "0")}:${String(eTime.getMinutes()).padStart(2, "0")}` : undefined,
-               status: st as any,
-             };
-          });
-          setBookings(mappedBookings);
-        }
+        await occupyPlace(scannedDesk.dbId!);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Не удалось забронировать";
+        const msg = e instanceof Error ? e.message : "Не удалось занять место";
         toast.error(msg);
         return;
       }
@@ -388,13 +324,12 @@ const Index = () => {
       const time = nowHM();
       setBookingTime(time);
       setScreen("success");
-      toast.success(`Стол ${scannedDesk.id} забронирован`);
+      toast.success(`Стол ${scannedDesk.id} занят`);
     })();
-    return;
-    toast.success(`Стол ${scannedDesk.id} забронирован`);
   };
 
   const handleRelease = () => {
+    const userRole = user?.role || "student";
     if (!myDeskId) {
       setScannedDeskId(null);
       setScreen("workspace");
@@ -406,29 +341,6 @@ const Index = () => {
     void (async () => {
       try {
         await releasePlace(mineDesk.dbId!);
-        const history = await fetchUserHistory();
-        if (Array.isArray(history)) {
-          const mappedBookings: Booking[] = history.map((h: any) => {
-             let st = "completed";
-             if (!h.end_time) st = "active";
-             const sTime = new Date(h.start_time);
-             let eTime;
-             if (h.end_time) eTime = new Date(h.end_time);
-             return {
-               id: String(h.id),
-               deskId: h.place_number,
-               dbId: h.place_id,
-               roomId: String(h.room_id),
-               roomName: h.room_name,
-               floor: 1,
-               date: sTime.toISOString().slice(0, 10),
-               startTime: `${String(sTime.getHours()).padStart(2, "0")}:${String(sTime.getMinutes()).padStart(2, "0")}`,
-               endTime: eTime ? `${String(eTime.getHours()).padStart(2, "0")}:${String(eTime.getMinutes()).padStart(2, "0")}` : undefined,
-               status: st as any,
-             };
-          });
-          setBookings(mappedBookings);
-        }
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Не удалось освободить место";
         toast.error(msg);
@@ -436,6 +348,7 @@ const Index = () => {
       }
 
       updateDesk(room.id, myDeskId, "available");
+      setBookings(prev => prev.filter(b => b.status !== "active"));
       toast.success("Место освобождено");
       setScannedDeskId(null);
       setScreen("workspace");
@@ -449,34 +362,22 @@ const Index = () => {
     try {
       await releasePlace(b.dbId);
       updateDesk(b.roomId, b.deskId, "available");
-      
-      const history = await fetchUserHistory();
-      if (Array.isArray(history)) {
-        const mappedBookings: Booking[] = history.map((h: any) => {
-           let st = "completed";
-           if (!h.end_time) st = "active";
-           const sTime = new Date(h.start_time);
-           let eTime;
-           if (h.end_time) eTime = new Date(h.end_time);
-           return {
-             id: String(h.id),
-             deskId: h.place_number,
-             dbId: h.place_id,
-             roomId: String(h.room_id),
-             roomName: h.room_name,
-             floor: 1,
-             date: sTime.toISOString().slice(0, 10),
-             startTime: `${String(sTime.getHours()).padStart(2, "0")}:${String(sTime.getMinutes()).padStart(2, "0")}`,
-             endTime: eTime ? `${String(eTime.getHours()).padStart(2, "0")}:${String(eTime.getMinutes()).padStart(2, "0")}` : undefined,
-             status: st as any,
-           };
-        });
-        setBookings(mappedBookings);
-      }
-      toast.success("Бронь отменена");
+      setBookings(prev => prev.filter(x => x.id !== id));
+      toast.success("Место освобождено");
     } catch (e) {
-      toast.error("Не удалось отменить бронь");
+      toast.error("Не удалось освободить место");
     }
+  };
+
+  const handleExitComplete = () => {
+    setIsInRoom(false);
+    setUser(prev => ({ ...prev, is_in_room: false, current_room: null, current_place: null }));
+    if (myDeskId) {
+      updateDesk(room.id, myDeskId, "available");
+    }
+    setBookings(prev => prev.filter(b => b.status !== "active"));
+    setScannedDeskId(null);
+    setScreen("workspace");
   };
 
   const handleDeskClick = (desk: Desk) => {
@@ -486,8 +387,6 @@ const Index = () => {
 
   const handleNavigate = (key: NavKey) => {
     if (key === "map") setScreen("workspace");
-    if (key === "bookings") setScreen("bookings");
-    if (key === "history") setScreen("history");
     if (key === "profile") setScreen("profile");
     if (key === "admin_users") setScreen("admin_users");
     if (key === "admin_history") setScreen("admin_history");
@@ -497,22 +396,9 @@ const Index = () => {
     try {
       const updated = await updateUserProfile(data);
       setUser(prev => ({ ...prev, ...updated }));
-      if (updated.preferred_room) {
-        setCurrentRoomId(String(updated.preferred_room));
-      }
       toast.success("Настройки сохранены");
     } catch (e) {
       toast.error("Не удалось обновить профиль");
-    }
-  };
-
-  const handleClearHistory = async () => {
-    try {
-      await clearUserHistory();
-      setBookings([]);
-      toast.success("История очищена");
-    } catch (e) {
-      toast.error("Ошибка очистки истории");
     }
   };
 
@@ -574,11 +460,24 @@ const Index = () => {
         <WorkspaceScreen
           room={room}
           myDeskId={myDeskId}
+          isInRoom={isInRoom}
           onScan={openWorkspaceScanner}
           onDeskClick={handleDeskClick}
           onOpenRooms={() => setScreen("rooms")}
           onNavigate={handleNavigate}
           isAdmin={user?.is_staff}
+          userRole={user?.role || "student"}
+          onRoomUpdate={(apiRoom: any) => {
+            setRooms(prev => prev.map(r => 
+              r.id === String(apiRoom.id) 
+                ? { 
+                    ...r, 
+                    exitMode: apiRoom.exit_mode, 
+                    exitPassword: apiRoom.exit_password 
+                  } 
+                : r
+            ));
+          }}
         />
       )}
       {screen === "details" && scannedDesk && (
@@ -588,8 +487,9 @@ const Index = () => {
           onBack={() => setScreen("workspace")}
           onBook={handleBook}
           onRelease={handleRelease}
-          onScanQr={() => openDeskScanner(scannedDesk.id)}
-          scannedQrValue={deskQrValues[scannedDesk.id] ?? null}
+          userRole={user?.role || "student"}
+          exitMode={room.exitMode || "password"}
+          onExitSuccess={handleExitComplete}
           isAdmin={user?.is_staff}
         />
       )}
@@ -598,20 +498,12 @@ const Index = () => {
           desk={scannedDesk}
           room={room}
           startTime={bookingTime}
+          exitMode={room.exitMode || "password"}
+          userRole={user?.role || "student"}
           onRelease={handleRelease}
+          onExitSuccess={handleExitComplete}
           onHome={() => setScreen("workspace")}
         />
-      )}
-      {screen === "bookings" && (
-        <BookingsScreen
-          bookings={bookings}
-          onCancel={handleCancelBooking}
-          onScan={openWorkspaceScanner}
-          onNavigate={handleNavigate}
-        />
-      )}
-      {screen === "history" && (
-        <HistoryScreen bookings={bookings} isAdmin={user?.is_staff} onNavigate={handleNavigate} onClearHistory={handleClearHistory} />
       )}
       {screen === "admin_users" && (
         <AdminUsersScreen onBack={() => setScreen("workspace")} />
@@ -622,10 +514,8 @@ const Index = () => {
       {screen === "profile" && (
         <ProfileScreen
           user={user}
-          rooms={rooms}
           onLogout={handleLogout}
           onNavigate={handleNavigate}
-          onUpdateProfile={handleUpdateProfile}
           isAdmin={user?.is_staff}
         />
       )}
@@ -644,11 +534,8 @@ const Index = () => {
 
       <ScannerModal
         open={scannerOpen}
-        onOpenChange={(open) => {
-          setScannerOpen(open);
-          if (!open) setScanDeskTarget(null);
-        }}
-        title={scanDeskTarget ? `Сканировать QR для стола ${scanDeskTarget}` : "Сканирование QR"}
+        onOpenChange={setScannerOpen}
+        title="Сканирование QR кабинета"
         onDecode={handleDecoded}
       />
     </PhoneFrame>

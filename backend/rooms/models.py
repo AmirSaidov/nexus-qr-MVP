@@ -7,8 +7,17 @@ class User(AbstractUser):
     # AbstractUser уже содержит: username, password, email, first_name, last_name
     # Нам остается только добавить имя, если username тебе недостаточно
     name = models.CharField(max_length=255, blank=True) 
-    preferred_room = models.ForeignKey('Room', null=True, blank=True, on_delete=models.SET_NULL)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_in_room = models.BooleanField(default=False)
+    current_room = models.ForeignKey('Room', on_delete=models.SET_NULL, null=True, blank=True, related_name='current_users')
+    current_place = models.ForeignKey('Place', on_delete=models.SET_NULL, null=True, blank=True, related_name='current_users')
+    check_in_time = models.DateTimeField(null=True, blank=True)
+    ROLE_CHOICES = [
+        ('student', 'Ученик'),
+        ('teacher', 'Преподаватель'),
+        ('admin', 'Администратор'),
+    ]
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='student')
 
     def __str__(self):
         return self.username
@@ -17,6 +26,12 @@ class Room(models.Model):
     name = models.CharField(max_length=255)
     qr_code = models.CharField(max_length=255, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    EXIT_MODES = [
+        ('password', 'По паролю'),
+        ('teacher', 'Через преподавателя'),
+    ]
+    exit_mode = models.CharField(max_length=20, choices=EXIT_MODES, default='password')
+    exit_password = models.CharField(max_length=50, blank=True, null=True)
 
     def __str__(self):
         return self.name
@@ -30,10 +45,8 @@ class Place(models.Model):
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='places')
     number = models.IntegerField()
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='free')
-    # Связываем с нашей новой моделью User
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     occupied_at = models.DateTimeField(null=True, blank=True)
-    qr_code = models.CharField(max_length=255, unique=True, null=True, blank=True)
 
     class Meta:
         unique_together = ('room', 'number')
@@ -69,3 +82,21 @@ class OccupancyHistory(models.Model):
     class Meta:
         verbose_name = "History"
         verbose_name_plural = "Histories"
+
+class ExitRequest(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Ожидание'),
+        ('approved', 'Разрешено'),
+        ('rejected', 'Отклонено'),
+    ]
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='exit_requests')
+    room = models.ForeignKey(Room, on_delete=models.CASCADE)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Exit Request"
+        verbose_name_plural = "Exit Requests"
+
+    def __str__(self):
+        return f"{self.user.username} - {self.room.name} ({self.status})"

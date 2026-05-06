@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import OccupancyHistory, Place, Room, User
+from .models import OccupancyHistory, Place, Room, User, ExitRequest
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -8,7 +8,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'name', 'email', 'preferred_room', 'is_staff']
+        fields = ['id', 'username', 'name', 'email', 'is_staff', 'is_in_room', 'current_room', 'current_place', 'check_in_time', 'role']
 
     def get_name(self, obj):
         return getattr(obj, 'name', '') or obj.get_full_name() or obj.username
@@ -17,7 +17,7 @@ class UserSerializer(serializers.ModelSerializer):
 class RoomSerializer(serializers.ModelSerializer):
     class Meta:
         model = Room
-        fields = ['id', 'name', 'qr_code']
+        fields = ['id', 'name', 'qr_code', 'exit_mode', 'exit_password']
 
 
 class PlaceSerializer(serializers.ModelSerializer):
@@ -28,7 +28,7 @@ class PlaceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Place
-        fields = ['id', 'number', 'status', 'backend_status', 'occupied_at', 'user', 'user_name', 'qr_code']
+        fields = ['id', 'number', 'status', 'backend_status', 'occupied_at', 'user', 'user_name']
 
     def get_status(self, obj):
         return {
@@ -73,3 +73,10 @@ class OccupancyHistorySerializer(serializers.ModelSerializer):
         if obj.start_time:
             return int((obj.end_time - obj.start_time).total_seconds() // 60)
         return obj.duration_minutes
+
+
+class ExitRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExitRequest
+        fields = ['id', 'user', 'room', 'status', 'created_at']
+        read_only_fields = ['id', 'user', 'created_at']

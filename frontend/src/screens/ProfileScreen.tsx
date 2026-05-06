@@ -1,18 +1,19 @@
-import { LogOut, ChevronRight, MapPin } from "lucide-react";
+import { LogOut, ChevronRight, MapPin, ChevronDown, ShieldCheck, GraduationCap, Shield } from "lucide-react";
+import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { BottomNav, NavKey } from "@/components/booking/BottomNav";
 import { UserProfile, Room } from "@/types/booking";
 
 interface Props {
   user: UserProfile;
-  rooms: Room[];
   onLogout: () => void;
   onNavigate: (key: NavKey) => void;
-  onUpdateProfile: (data: Partial<UserProfile>) => void;
   isAdmin?: boolean;
 }
 
-export const ProfileScreen = ({ user, rooms, isAdmin = false, onLogout, onNavigate, onUpdateProfile }: Props) => {
+export const ProfileScreen = ({ user, isAdmin = false, onLogout, onNavigate }: Props) => {
+  const { theme, setTheme } = useTheme();
+  
   return (
     <div className="flex-1 flex flex-col bg-background">
       <header className="px-5 md:px-8 pt-4 pb-3 text-center">
@@ -30,27 +31,37 @@ export const ProfileScreen = ({ user, rooms, isAdmin = false, onLogout, onNaviga
             <p className="text-xs text-muted-foreground mt-0.5 truncate">
               {user.position} · {user.department}
             </p>
+            <RoleBadge role={user.role} />
           </div>
         </section>
 
-        <section className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden flex flex-col">
-          <div className="w-full flex items-center gap-3 px-4 py-3.5 border-t border-border bg-card text-left relative">
-            <span className="text-muted-foreground"><MapPin className="w-4 h-4" /></span>
-            <span className="flex-1 text-sm font-medium">Мой кабинет</span>
-            <select
-              value={user.preferred_room || ""}
-              onChange={(e) => onUpdateProfile({ preferred_room: e.target.value })}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            >
-              <option value="" disabled className="text-foreground bg-background">Не выбран</option>
-              {rooms.map(r => <option key={r.id} value={r.id} className="text-foreground bg-background">{r.name}</option>)}
-            </select>
-            <span className="text-xs text-muted-foreground pointer-events-none">
-              {rooms.find(r => r.id === String(user.preferred_room))?.name || "Не выбран"}
-            </span>
-            <ChevronRight className="w-4 h-4 text-muted-foreground pointer-events-none" />
-          </div>
-        </section>
+        <div className="pt-2">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">Оформление</h2>
+          <section className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden flex flex-col">
+            <div className="w-full flex items-center justify-between px-4 py-3.5 bg-card relative">
+              <div>
+                <p className="text-sm font-medium">Тема приложения</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Светлая или тёмная тема</p>
+              </div>
+              
+              <div className="relative border border-border rounded-lg px-3 py-1.5 flex items-center gap-2 bg-background">
+                <span className="text-sm font-medium pointer-events-none flex items-center gap-1.5">
+                  <span className="capitalize">{theme === 'light' ? '☀️ Светлая' : theme === 'dark' ? '🌙 Тёмная' : '💻 Системная'}</span>
+                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                </span>
+                <select
+                  value={theme}
+                  onChange={(e) => setTheme(e.target.value)}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                >
+                  <option value="light">Светлая</option>
+                  <option value="dark">Тёмная</option>
+                  <option value="system">Системная</option>
+                </select>
+              </div>
+            </div>
+          </section>
+        </div>
 
         <Button
           onClick={onLogout}
@@ -91,3 +102,21 @@ const Item = ({
     <ChevronRight className="w-4 h-4 text-muted-foreground" />
   </button>
 );
+
+const roleConfig = {
+  student: { label: "Ученик", icon: GraduationCap, color: "bg-blue-500/10 text-blue-500" },
+  teacher: { label: "Преподаватель", icon: ShieldCheck, color: "bg-primary/10 text-primary" },
+  admin: { label: "Администратор", icon: Shield, color: "bg-purple-500/10 text-purple-500" },
+};
+
+const RoleBadge = ({ role }: { role?: string }) => {
+  const cfg = roleConfig[role as keyof typeof roleConfig] ?? roleConfig.student;
+  const Icon = cfg.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ${cfg.color}`}>
+      <Icon className="w-3 h-3" />
+      {cfg.label}
+    </span>
+  );
+};
+

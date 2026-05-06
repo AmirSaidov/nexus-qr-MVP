@@ -16,8 +16,9 @@ def release_place(place_id):
 
         history = None
         if place.user:
+            user = place.user
             history = OccupancyHistory.objects.filter(
-                user=place.user,
+                user=user,
                 place=place,
                 end_time__isnull=True
             ).last()
@@ -25,6 +26,13 @@ def release_place(place_id):
             if history:
                 history.end_time = timezone.now()
                 history.save()
+
+            # Clear user's active status
+            user.is_in_room = False
+            user.current_room = None
+            user.current_place = None
+            user.check_in_time = None
+            user.save()
 
         place.user = None
         place.status = 'free'
@@ -34,18 +42,13 @@ def release_place(place_id):
         return place, history, None
 
 
-def occupy_specific_place(user_id, place_id, qr_code=None):
+def occupy_specific_place(user_id, place_id):
     with transaction.atomic():
         try:
             user = User.objects.get(id=user_id)
             place = Place.objects.select_for_update().get(id=place_id)
         except (User.DoesNotExist, Place.DoesNotExist):
             return None, "User or place was not found"
-
-        if place.qr_code and place.qr_code != qr_code:
-            return None, "QR код не совпадает с этим местом"
-        elif not place.qr_code and qr_code:
-             return None, "Для этого места еще не задан QR код в системе"
 
         if place.status == 'occupied':
             return None, "Place is already occupied"
@@ -57,6 +60,12 @@ def occupy_specific_place(user_id, place_id, qr_code=None):
         place.status = 'occupied'
         place.occupied_at = timezone.now()
         place.save()
+
+        user.is_in_room = True
+        user.current_room = place.room
+        user.current_place = place
+        user.check_in_time = place.occupied_at
+        user.save()
 
         OccupancyHistory.objects.create(
             user=user,
@@ -96,6 +105,13 @@ def occupy_place_in_room(user_id, qr_code):
             place.status = 'occupied'
             place.occupied_at = timezone.now()
             place.save()
+
+            user = User.objects.get(id=user_id)
+            user.is_in_room = True
+            user.current_room = room
+            user.current_place = place
+            user.check_in_time = place.occupied_at
+            user.save()
 
             OccupancyHistory.objects.create(
                 user_id=user_id,

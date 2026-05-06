@@ -18,8 +18,6 @@ export const BottomNav = ({ active = "map", isAdmin = false, onNavigate }: Botto
       ]
     : [
         { key: "map" as NavKey, label: "Карта", icon: Map },
-        { key: "bookings" as NavKey, label: "Мои брони", icon: Calendar },
-        { key: "history" as NavKey, label: "История", icon: Clock },
         { key: "profile" as NavKey, label: "Профиль", icon: User },
       ];
   return (

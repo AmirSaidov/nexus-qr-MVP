@@ -17,6 +17,13 @@ from .views import (
     AdminUserListView,
     AdminHistoryView,
     AdminActiveBookingsView,
+    ExitRequestView,
+    ExitConfirmView,
+    ExitStatusView,
+    RoomConfigView,
+    TeacherRequestsView,
+    HandleExitRequestView,
+    RoomAttendanceView,
 )
 
 
@@ -37,4 +44,11 @@ urlpatterns = [
     path('admin/users', AdminUserListView.as_view(), name='admin-users'),
     path('admin/active-bookings', AdminActiveBookingsView.as_view(), name='admin-active-bookings'),
     path('admin/history', AdminHistoryView.as_view(), name='admin-history'),
+    path('exit/request/', ExitRequestView.as_view(), name='exit-request'),
+    path('exit/confirm/', ExitConfirmView.as_view(), name='exit-confirm'),
+    path('exit/status/', ExitStatusView.as_view(), name='exit-status'),
+    path('teacher/config/', RoomConfigView.as_view(), name='teacher-config'),
+    path('teacher/requests/', TeacherRequestsView.as_view(), name='teacher-requests'),
+    path('teacher/requests/<int:request_id>/handle/', HandleExitRequestView.as_view(), name='teacher-handle-request'),
+    path('teacher/attendance/', RoomAttendanceView.as_view(), name='teacher-attendance'),
 ]

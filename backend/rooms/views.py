@@ -139,6 +139,7 @@ class RoomPlacesView(APIView):
 
 
 class EnterRoomView(APIView):
+    """QR scan → check user into a room. Sets is_in_room=True."""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -146,22 +147,47 @@ class EnterRoomView(APIView):
         if not qr_code:
             return Response({"success": False, "message": "qr_code is required"}, status=400)
 
-        place, error = occupy_place_in_room(request.user.id, qr_code)
-        if error:
-            return Response({"success": False, "message": error}, status=400)
-        return Response({"success": True, "place": PlaceSerializer(place).data})
+        try:
+            room = Room.objects.get(qr_code=qr_code)
+        except Room.DoesNotExist:
+            return Response({"success": False, "message": "Кабинет не найден. Проверьте QR-код"}, status=404)
+
+        user = request.user
+        user.is_in_room = True
+        user.current_room = room
+        user.check_in_time = timezone.now()
+        user.save()
+
+        return Response({
+            "success": True,
+            "message": f"Вы вошли в {room.name}",
+            "room": RoomSerializer(room).data,
+        })
 
 
 class OccupySpecificPlaceView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, place_id):
-        qr_code = request.data.get('qr_code')
-        place, error = occupy_specific_place(request.user.id, place_id, qr_code)
+        user = request.user
+        # Must be checked into a room first
+        if not user.is_in_room or not user.current_room:
+            return Response({"success": False, "message": "Сначала войдите в кабинет через QR-код"}, status=403)
+
+        try:
+            place = Place.objects.get(id=place_id)
+        except Place.DoesNotExist:
+            return Response({"success": False, "message": "Место не найдено"}, status=404)
+
+        # Must book within current room
+        if place.room_id != user.current_room_id:
+            return Response({"success": False, "message": "Это место находится в другом кабинете"}, status=403)
+
+        place_obj, error = occupy_specific_place(user.id, place_id)
         if error:
             return Response({"success": False, "message": error}, status=400)
 
-        return Response({"success": True, "place": PlaceSerializer(place).data})
+        return Response({"success": True, "place": PlaceSerializer(place_obj).data})
 
 
 class LeavePlaceView(APIView):
@@ -338,3 +364,197 @@ class AdminActiveBookingsView(APIView):
             })
 
         return Response(data)
+
+
+from .models import ExitRequest
+from .serializers import ExitRequestSerializer
+
+class ExitRequestView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if not user.is_in_room or not user.current_room:
+            return Response({"success": False, "message": "Вы не находитесь в кабинете"}, status=400)
+        
+        if user.current_room.exit_mode != 'teacher':
+            return Response({"success": False, "message": "В этом кабинете выход по паролю"}, status=400)
+
+        req, created = ExitRequest.objects.get_or_create(
+            user=user,
+            room=user.current_room,
+            status='pending'
+        )
+        return Response({"success": True, "message": "Запрос на выход отправлен"})
+
+
+class ExitConfirmView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        password = request.data.get('password')
+
+        if not user.is_in_room or not user.current_room:
+            return Response({"success": False, "message": "Вы не находитесь в кабинете"}, status=400)
+        
+        if user.current_room.exit_mode == 'password':
+            if user.current_room.exit_password and user.current_room.exit_password != password:
+                return Response({"success": False, "message": "Неверный пароль"}, status=400)
+        elif user.current_room.exit_mode == 'teacher':
+            return Response({"success": False, "message": "В этом кабинете выход только по разрешению преподавателя"}, status=400)
+
+        place = user.current_place
+        if place:
+            # release_place also clears user status fields
+            release_place(place.id)
+        else:
+            # If user entered room but didn't pick a place, still clear their status
+            user.is_in_room = False
+            user.current_room = None
+            user.current_place = None
+            user.check_in_time = None
+            user.save()
+            
+        return Response({"success": True, "message": "Выход подтвержден"})
+
+
+class ExitStatusView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if not user.is_in_room or not user.current_room:
+            return Response({"success": False, "status": "not_in_room"})
+        
+        req = ExitRequest.objects.filter(user=user, room=user.current_room).order_by('-created_at').first()
+        
+        status = "no_request"
+        if req:
+            status = req.status
+            
+        return Response({
+            "success": True,
+            "status": status,
+            "exit_mode": user.current_room.exit_mode
+        })
+
+
+class RoomConfigView(APIView):
+    """Allow teachers to configure their current room."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if user.role not in ['teacher', 'admin']:
+            return Response({"success": False, "message": "Только преподаватели могут менять настройки кабинета"}, status=403)
+        
+        if not user.is_in_room or not user.current_room:
+            return Response({"success": False, "message": "Вы не находитесь в кабинете"}, status=400)
+        
+        room = user.current_room
+        exit_mode = request.data.get('exit_mode')
+        exit_password = request.data.get('exit_password')
+        
+        if exit_mode:
+            room.exit_mode = exit_mode
+        if exit_password is not None:
+            room.exit_password = exit_password
+            
+        room.save()
+        return Response({"success": True, "message": "Настройки сохранены", "room": RoomSerializer(room).data})
+
+
+class TeacherRequestsView(APIView):
+    """List pending exit requests for the teacher's current room."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if user.role not in ['teacher', 'admin']:
+            return Response({"success": False, "message": "Доступ запрещен"}, status=403)
+        
+        if not user.is_in_room or not user.current_room:
+            return Response({"success": False, "message": "Вы не находитесь в кабинете"}, status=400)
+            
+        requests = ExitRequest.objects.filter(room=user.current_room, status='pending').order_by('created_at')
+        
+        data = []
+        for r in requests:
+            data.append({
+                "id": r.id,
+                "user_name": r.user.name or r.user.username,
+                "created_at": r.created_at,
+                "place_number": r.user.current_place.number if r.user.current_place else None
+            })
+            
+        return Response({"success": True, "requests": data})
+
+
+class HandleExitRequestView(APIView):
+    """Approve or reject a student's exit request."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, request_id):
+        user = request.user
+        if user.role not in ['teacher', 'admin']:
+            return Response({"success": False, "message": "Доступ запрещен"}, status=403)
+            
+        action = request.data.get('action') # 'approve' or 'reject'
+        
+        try:
+            exit_req = ExitRequest.objects.get(id=request_id)
+        except ExitRequest.DoesNotExist:
+            return Response({"success": False, "message": "Запрос не найден"}, status=404)
+            
+        if action == 'approve':
+            exit_req.status = 'approved'
+            exit_req.save()
+            
+            # Also release the place for the student
+            student = exit_req.user
+            place = student.current_place
+            if place:
+                release_place(place.id)
+            else:
+                student.is_in_room = False
+                student.current_room = None
+                student.current_place = None
+                student.check_in_time = None
+                student.save()
+                
+            return Response({"success": True, "message": "Выход разрешен"})
+        
+        elif action == 'reject':
+            exit_req.status = 'rejected'
+            exit_req.save()
+            return Response({"success": True, "message": "Запрос отклонен"})
+            
+        return Response({"success": False, "message": "Неверное действие"}, status=400)
+
+
+class RoomAttendanceView(APIView):
+    """List all users currently in the same room as the teacher."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if user.role not in ['teacher', 'admin']:
+            return Response({"success": False, "message": "Доступ запрещен"}, status=403)
+            
+        if not user.is_in_room or not user.current_room:
+            return Response({"success": False, "message": "Вы не находитесь в кабинете"}, status=400)
+            
+        users = User.objects.filter(current_room=user.current_room, is_in_room=True).order_by('role', 'name')
+        
+        data = []
+        for u in users:
+            data.append({
+                "id": u.id,
+                "name": u.name or u.username,
+                "role": u.role,
+                "place_number": u.current_place.number if u.current_place else None,
+                "check_in_time": u.check_in_time
+            })
+            
+        return Response({"success": True, "users": data})
